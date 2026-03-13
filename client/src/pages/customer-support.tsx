@@ -5,7 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { SidebarLayout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Waveform } from "@/components/waveform";
-import { Mic, Square, Loader2, User, Bot, AlertCircle } from "lucide-react";
+import { Mic, Square, Loader2, User, Bot, AlertCircle, Activity } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 
