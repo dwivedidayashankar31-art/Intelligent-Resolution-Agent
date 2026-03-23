@@ -6,19 +6,35 @@ import { customers, tickets, agentActions } from "@shared/schema";
 
 const audioBodyParser = express.json({ limit: "50mb" });
 
-const SYSTEM_PROMPT = `You are Nexus, an elite AI customer resolution agent for a large e-commerce platform. 
+async function buildSystemPrompt(): Promise<string> {
+  let context = "";
+  try {
+    const [allCustomers, allTickets] = await Promise.all([
+      db.select().from(customers).limit(20),
+      db.select().from(tickets).limit(30),
+    ]);
+    const ticketLines = allTickets.map((t) => {
+      const customer = allCustomers.find((c) => c.id === t.customerId);
+      return `  - Ticket #${t.id} [${t.status.toUpperCase()}]: "${t.title}" — Customer: ${customer?.name ?? "Unknown"} (${customer?.email ?? ""})`;
+    }).join("\n");
+    context = `\n\nCURRENT CRM DATA (use this to help customers by name and ticket):\nCustomers: ${allCustomers.length} registered\nOpen/Escalated Tickets:\n${ticketLines}`;
+  } catch {
+    context = "";
+  }
+  return `You are Nexus, an elite AI customer resolution agent for a large e-commerce platform.
 You speak naturally, confidently, and empathetically. You can:
-- Issue refunds for verified orders
-- Reset customer passwords and account access
-- Update CRM records
-- Escalate complex issues to human agents
+- Issue refunds for verified orders (say "I've processed that refund" when you do)
+- Reset customer passwords (say "Your password has been reset" when you do)
+- Update CRM records (say "I've updated your account" when you do)
+- Escalate complex issues to human specialists (say "I'm escalating this to our specialist team" when you do)
 - Explain order statuses and tracking
 - Handle billing disputes
 
-Always introduce yourself as Nexus on the first message. Be concise but warm. 
-When you take an action (like issuing a refund or resetting a password), explicitly confirm it — say "I've processed that refund" or "Your password has been reset" so the customer feels resolved.
-If the customer is angry, de-escalate with empathy first before offering solutions.
-Keep responses under 3 sentences when possible — the user is on a voice call.`;
+Always introduce yourself as Nexus on the first message. Be concise but warm.
+When you take an action, explicitly confirm it with a specific phrase so the system can detect it.
+If a customer seems angry, de-escalate with empathy first before offering solutions.
+Keep responses under 3 sentences — the user may be on a voice call.${context}`;
+}
 
 export function registerAudioRoutes(app: Express): void {
   app.get("/api/conversations", async (req: Request, res: Response) => {
@@ -86,10 +102,11 @@ export function registerAudioRoutes(app: Express): void {
       res.setHeader("Cache-Control", "no-cache");
       res.setHeader("Connection", "keep-alive");
 
+      const systemPrompt = await buildSystemPrompt();
       const stream = await openai.chat.completions.create({
         model: "gpt-5-mini",
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
+          { role: "system", content: systemPrompt },
           ...chatHistory,
         ],
         stream: true,
@@ -148,12 +165,13 @@ export function registerAudioRoutes(app: Express): void {
 
       res.write(`data: ${JSON.stringify({ type: "user_transcript", data: userTranscript })}\n\n`);
 
+      const systemPrompt = await buildSystemPrompt();
       const stream = await openai.chat.completions.create({
         model: "gpt-audio",
         modalities: ["text", "audio"],
         audio: { voice, format: "pcm16" },
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
+          { role: "system", content: systemPrompt },
           ...chatHistory,
         ],
         stream: true,

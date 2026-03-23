@@ -1,8 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, buildUrl } from "@shared/routes";
+import { api } from "@shared/routes";
 import { parseWithLogging } from "../lib/utils";
 
-// CUSTOMERS
 export function useCustomers() {
   return useQuery({
     queryKey: [api.customers.list.path],
@@ -15,7 +14,6 @@ export function useCustomers() {
   });
 }
 
-// TICKETS
 export function useTickets() {
   return useQuery({
     queryKey: [api.tickets.list.path],
@@ -47,7 +45,6 @@ export function useCreateTicket() {
   });
 }
 
-// ACTIONS
 export function useActions() {
   return useQuery({
     queryKey: [api.actions.list.path],
@@ -57,6 +54,7 @@ export function useActions() {
       const data = await res.json();
       return parseWithLogging(api.actions.list.responses[200], data, "actions.list");
     },
+    refetchInterval: 5000,
   });
 }
 
@@ -79,5 +77,24 @@ export function useTriggerAction() {
       queryClient.invalidateQueries({ queryKey: [api.actions.list.path] });
       queryClient.invalidateQueries({ queryKey: [api.tickets.list.path] });
     },
+  });
+}
+
+export function useStats() {
+  return useQuery({
+    queryKey: ["/api/stats"],
+    queryFn: async () => {
+      const res = await fetch("/api/stats", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch stats");
+      return res.json() as Promise<{
+        customers: number;
+        tickets: number;
+        openTickets: number;
+        escalated: number;
+        resolved: number;
+        actions: number;
+      }>;
+    },
+    refetchInterval: 8000,
   });
 }

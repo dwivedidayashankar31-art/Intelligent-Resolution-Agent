@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { SidebarLayout } from "@/components/layout";
-import { useCustomers, useTickets, useActions, useTriggerAction } from "@/hooks/use-crm";
+import { useCustomers, useTickets, useActions, useTriggerAction, useStats } from "@/hooks/use-crm";
 import { Button } from "@/components/ui/button";
 import { Users, Ticket, Activity, Plus, ShieldAlert, KeyRound, RefreshCcw, RefreshCw, Loader2, X, CheckCircle, AlertCircle } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
@@ -120,6 +120,7 @@ export default function CrmPortal() {
   const { data: customers } = useCustomers();
   const { data: tickets } = useTickets();
   const { data: actions } = useActions();
+  const { data: stats } = useStats();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const customerMap = customers?.reduce((acc: Record<number, string>, c) => {
@@ -158,22 +159,24 @@ export default function CrmPortal() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           {[
-            { label: "Total Customers", value: customers?.length || 0, icon: Users, color: "text-primary", glow: "rgba(0,240,255,0.15)" },
-            { label: "Open Tickets", value: tickets?.length || 0, icon: Ticket, color: "text-secondary", glow: "rgba(138,43,226,0.15)" },
-            { label: "AI Actions Executed", value: actions?.length || 0, icon: Activity, color: "text-green-400", glow: "rgba(16,185,129,0.15)" },
+            { label: "Customers", value: stats?.customers ?? customers?.length ?? 0, icon: Users, color: "text-primary", glow: "rgba(0,240,255,0.12)" },
+            { label: "Open Tickets", value: stats?.openTickets ?? 0, icon: Ticket, color: "text-yellow-400", glow: "rgba(234,179,8,0.12)" },
+            { label: "Escalated", value: stats?.escalated ?? 0, icon: ShieldAlert, color: "text-red-400", glow: "rgba(239,68,68,0.12)" },
+            { label: "Resolved", value: stats?.resolved ?? 0, icon: CheckCircle, color: "text-green-400", glow: "rgba(16,185,129,0.12)" },
+            { label: "AI Actions", value: stats?.actions ?? actions?.length ?? 0, icon: Activity, color: "text-secondary", glow: "rgba(138,43,226,0.12)" },
           ].map((stat) => (
             <motion.div
               key={stat.label}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="glass-panel p-6 rounded-2xl relative overflow-hidden"
-              style={{ boxShadow: `0 0 30px ${stat.glow}` }}
+              className="glass-panel p-5 rounded-2xl relative overflow-hidden"
+              style={{ boxShadow: `0 0 25px ${stat.glow}` }}
             >
-              <stat.icon className={cn("absolute top-4 right-4 w-10 h-10 opacity-10", stat.color)} />
-              <p className="text-xs font-mono text-muted-foreground uppercase tracking-wider mb-2">{stat.label}</p>
-              <h3 className={cn("text-4xl font-display font-bold", stat.color)}>{stat.value}</h3>
+              <stat.icon className={cn("absolute top-3 right-3 w-8 h-8 opacity-10", stat.color)} />
+              <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-2">{stat.label}</p>
+              <h3 className={cn("text-3xl font-display font-bold", stat.color)}>{stat.value}</h3>
             </motion.div>
           ))}
         </div>

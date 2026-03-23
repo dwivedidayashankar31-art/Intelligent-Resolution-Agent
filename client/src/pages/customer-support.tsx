@@ -1,16 +1,28 @@
 import { useState, useRef, useEffect } from "react";
 import { useVoiceRecorder, useVoiceStream } from "@/replit_integrations/audio";
-import { useCreateConversation, useConversation } from "@/hooks/use-voice";
+import { useCreateConversation, useConversations } from "@/hooks/use-voice";
+import { useStats } from "@/hooks/use-crm";
 import { useQueryClient } from "@tanstack/react-query";
 import { SidebarLayout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Waveform } from "@/components/waveform";
-import { Mic, Square, User, Bot, Activity, MessageSquare, Phone, Send, Loader2 } from "lucide-react";
+import {
+  Mic, Square, User, Bot, Activity, MessageSquare, Phone, Send,
+  Loader2, RefreshCcw, KeyRound, ShieldAlert, RefreshCw, Clock, Plus
+} from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { formatDistanceToNow } from "date-fns";
 
 type Mode = "idle" | "voice" | "text";
 type Message = { role: "user" | "assistant"; content: string };
+
+const QUICK_SUGGESTIONS = [
+  { icon: RefreshCcw, label: "Request a refund", text: "I'd like to request a refund for my recent order." },
+  { icon: KeyRound, label: "Reset my password", text: "I can't log in and need to reset my password." },
+  { icon: ShieldAlert, label: "Escalate my issue", text: "This issue hasn't been resolved and I need to speak to a specialist." },
+  { icon: RefreshCw, label: "Update account info", text: "I need to update my account information." },
+];
 
 export default function CustomerSupport() {
   const [mode, setMode] = useState<Mode>("idle");
@@ -22,8 +34,11 @@ export default function CustomerSupport() {
 
   const queryClient = useQueryClient();
   const createConv = useCreateConversation();
+  const { data: conversations } = useConversations();
+  const { data: stats } = useStats();
   const recorder = useVoiceRecorder();
   const streamRef = useRef<string>("");
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const voiceStream = useVoiceStream({
     onUserTranscript: (text) => {
@@ -40,8 +55,6 @@ export default function CustomerSupport() {
       queryClient.invalidateQueries({ queryKey: ["/api/actions"] });
     },
   });
-
-  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -76,9 +89,9 @@ export default function CustomerSupport() {
     }
   };
 
-  const sendTextMessage = async () => {
-    if (!textInput.trim() || !conversationId || isSending) return;
-    const content = textInput.trim();
+  const sendTextMessage = async (overrideText?: string) => {
+    const content = (overrideText ?? textInput).trim();
+    if (!content || !conversationId || isSending) return;
     setTextInput("");
     setMessages((prev) => [...prev, { role: "user", content }]);
     setIsSending(true);
@@ -113,6 +126,7 @@ export default function CustomerSupport() {
               setStreamingText("");
               streamRef.current = "";
               queryClient.invalidateQueries({ queryKey: ["/api/actions"] });
+              queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
             }
           } catch {}
         }
@@ -137,83 +151,141 @@ export default function CustomerSupport() {
   if (mode === "idle") {
     return (
       <SidebarLayout>
-        <div className="h-full flex flex-col items-center justify-center gap-8">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-center max-w-xl"
-          >
-            <div className="w-20 h-20 rounded-2xl bg-primary/10 border border-primary/40 flex items-center justify-center mx-auto mb-6 shadow-[0_0_40px_rgba(0,240,255,0.2)]">
-              <Bot className="w-10 h-10 text-primary" />
+        <div className="h-full flex gap-6">
+          {/* Left: Session history */}
+          <div className="w-64 shrink-0 flex flex-col gap-4">
+            <div className="glass-panel rounded-2xl overflow-hidden flex flex-col">
+              <div className="p-4 border-b border-white/10 bg-black/20 flex items-center gap-2">
+                <Clock className="w-4 h-4 text-secondary" />
+                <span className="text-sm font-semibold">Past Sessions</span>
+              </div>
+              <div className="flex-1 overflow-y-auto max-h-72">
+                {conversations && conversations.length > 0 ? (
+                  <div className="p-2 space-y-1">
+                    {[...(conversations as any[])].reverse().slice(0, 12).map((c: any) => (
+                      <div
+                        key={c.id}
+                        data-testid={`session-${c.id}`}
+                        className="flex items-start gap-2 p-2.5 rounded-xl hover:bg-white/5 transition-colors cursor-default"
+                      >
+                        <div className="w-2 h-2 rounded-full bg-primary/60 shrink-0 mt-1.5" />
+                        <div className="min-w-0">
+                          <div className="text-xs font-medium truncate">{c.title}</div>
+                          <div className="text-[10px] text-muted-foreground font-mono">
+                            {c.createdAt ? formatDistanceToNow(new Date(c.createdAt), { addSuffix: true }) : "#" + c.id}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-4 text-center text-xs text-muted-foreground">No sessions yet</div>
+                )}
+              </div>
             </div>
-            <h1 className="text-4xl font-display font-bold mb-3">Nexus AI Agent</h1>
-            <p className="text-muted-foreground text-lg leading-relaxed">
-              Your autonomous customer resolution agent. Handles refunds, resets, CRM updates, and escalations — in real time.
-            </p>
-          </motion.div>
 
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="flex gap-4"
-          >
-            <button
-              onClick={() => startSession("voice")}
-              disabled={createConv.isPending}
-              data-testid="button-start-voice"
-              className="group flex flex-col items-center gap-4 p-8 rounded-3xl glass-panel border border-white/10 hover:border-primary/40 transition-all duration-300 hover:shadow-[0_0_30px_rgba(0,240,255,0.1)] w-52"
+            {/* Live stats mini-panel */}
+            {stats && (
+              <div className="glass-panel rounded-2xl p-4 space-y-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <Activity className="w-3.5 h-3.5 text-primary" />
+                  <span className="text-xs font-semibold">System Metrics</span>
+                </div>
+                {[
+                  { label: "Customers", value: stats.customers, color: "text-foreground" },
+                  { label: "Open Tickets", value: stats.openTickets, color: "text-primary" },
+                  { label: "Escalated", value: stats.escalated, color: "text-red-400" },
+                  { label: "Resolved", value: stats.resolved, color: "text-green-400" },
+                  { label: "AI Actions", value: stats.actions, color: "text-secondary" },
+                ].map((s) => (
+                  <div key={s.label} className="flex justify-between items-center">
+                    <span className="text-xs text-muted-foreground">{s.label}</span>
+                    <span className={cn("text-xs font-mono font-bold", s.color)}>{s.value}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Center: Main launch UI */}
+          <div className="flex-1 flex flex-col items-center justify-center gap-8">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-center max-w-xl"
             >
-              <div className="w-14 h-14 rounded-2xl bg-primary/10 border border-primary/30 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-                <Phone className="w-7 h-7 text-primary" />
+              <div className="w-20 h-20 rounded-2xl bg-primary/10 border border-primary/40 flex items-center justify-center mx-auto mb-6 shadow-[0_0_40px_rgba(0,240,255,0.2)]">
+                <Bot className="w-10 h-10 text-primary" />
               </div>
-              <div>
-                <div className="font-bold text-foreground mb-1">Voice Mode</div>
-                <div className="text-xs text-muted-foreground">Speak naturally with the AI agent</div>
-              </div>
-            </button>
+              <h1 className="text-4xl font-display font-bold mb-3">Nexus AI Agent</h1>
+              <p className="text-muted-foreground text-lg leading-relaxed">
+                Autonomous customer resolution. Handles refunds, resets, CRM updates, and escalations in real time.
+              </p>
+            </motion.div>
 
-            <button
-              onClick={() => startSession("text")}
-              disabled={createConv.isPending}
-              data-testid="button-start-text"
-              className="group flex flex-col items-center gap-4 p-8 rounded-3xl glass-panel border border-white/10 hover:border-secondary/40 transition-all duration-300 hover:shadow-[0_0_30px_rgba(138,43,226,0.1)] w-52"
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className="flex gap-4"
             >
-              <div className="w-14 h-14 rounded-2xl bg-secondary/10 border border-secondary/30 flex items-center justify-center group-hover:bg-secondary/20 transition-colors">
-                <MessageSquare className="w-7 h-7 text-secondary" />
-              </div>
-              <div>
-                <div className="font-bold text-foreground mb-1">Text Mode</div>
-                <div className="text-xs text-muted-foreground">Chat with the AI via text</div>
-              </div>
-            </button>
-          </motion.div>
+              <button
+                onClick={() => startSession("voice")}
+                disabled={createConv.isPending}
+                data-testid="button-start-voice"
+                className="group flex flex-col items-center gap-4 p-8 rounded-3xl glass-panel border border-white/10 hover:border-primary/40 transition-all duration-300 hover:shadow-[0_0_30px_rgba(0,240,255,0.1)] w-52"
+              >
+                <div className="w-14 h-14 rounded-2xl bg-primary/10 border border-primary/30 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+                  <Phone className="w-7 h-7 text-primary" />
+                </div>
+                <div>
+                  <div className="font-bold text-foreground mb-1">Voice Mode</div>
+                  <div className="text-xs text-muted-foreground">Speak naturally with the agent</div>
+                </div>
+              </button>
 
-          {createConv.isPending && (
-            <div className="flex items-center gap-2 text-muted-foreground text-sm">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Initializing secure channel...
-            </div>
-          )}
+              <button
+                onClick={() => startSession("text")}
+                disabled={createConv.isPending}
+                data-testid="button-start-text"
+                className="group flex flex-col items-center gap-4 p-8 rounded-3xl glass-panel border border-white/10 hover:border-secondary/40 transition-all duration-300 hover:shadow-[0_0_30px_rgba(138,43,226,0.1)] w-52"
+              >
+                <div className="w-14 h-14 rounded-2xl bg-secondary/10 border border-secondary/30 flex items-center justify-center group-hover:bg-secondary/20 transition-colors">
+                  <MessageSquare className="w-7 h-7 text-secondary" />
+                </div>
+                <div>
+                  <div className="font-bold text-foreground mb-1">Text Mode</div>
+                  <div className="text-xs text-muted-foreground">Chat with the agent via text</div>
+                </div>
+              </button>
+            </motion.div>
 
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.3 }}
-            className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full max-w-2xl mt-4"
-          >
-            {[
-              { label: "Refunds", desc: "Instant processing" },
-              { label: "Password Reset", desc: "Account recovery" },
-              { label: "CRM Updates", desc: "Real-time sync" },
-              { label: "Escalation", desc: "Smart routing" },
-            ].map((cap) => (
-              <div key={cap.label} className="p-4 rounded-2xl bg-white/5 border border-white/5 text-center">
-                <div className="text-primary font-semibold text-sm mb-1">{cap.label}</div>
-                <div className="text-muted-foreground text-xs">{cap.desc}</div>
+            {createConv.isPending && (
+              <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Initializing secure channel...
               </div>
-            ))}
-          </motion.div>
+            )}
+
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.3 }}
+              className="grid grid-cols-2 md:grid-cols-4 gap-3 w-full max-w-2xl"
+            >
+              {[
+                { label: "Refund Processing", desc: "Instant" },
+                { label: "Password Reset", desc: "Account recovery" },
+                { label: "CRM Updates", desc: "Real-time sync" },
+                { label: "Smart Escalation", desc: "Human handoff" },
+              ].map((cap) => (
+                <div key={cap.label} className="p-4 rounded-2xl bg-white/5 border border-white/5 text-center">
+                  <div className="text-primary font-semibold text-sm mb-1">{cap.label}</div>
+                  <div className="text-muted-foreground text-xs">{cap.desc}</div>
+                </div>
+              ))}
+            </motion.div>
+          </div>
         </div>
       </SidebarLayout>
     );
@@ -238,27 +310,50 @@ export default function CustomerSupport() {
           <button
             onClick={() => { setMode("idle"); setConversationId(null); setMessages([]); }}
             data-testid="button-end-session"
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors px-3 py-1 rounded-lg hover:bg-white/5"
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-lg hover:bg-white/5 border border-transparent hover:border-white/10"
           >
-            End Session
+            ← New Session
           </button>
         </div>
 
         <div className="flex-1 flex gap-4 min-h-0">
-          {/* Transcript panel */}
+          {/* Main chat/voice panel */}
           <div className="flex-1 glass-panel rounded-2xl flex flex-col overflow-hidden">
             <div className="p-4 border-b border-white/10 bg-black/20 flex items-center gap-2">
               <Bot className="w-4 h-4 text-primary" />
               <span className="font-semibold text-sm">Live Transcript</span>
               {isAgentResponding && (
-                <span className="ml-auto text-xs text-primary font-mono animate-pulse">Agent responding...</span>
+                <span className="ml-auto text-xs text-primary font-mono flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
+                  Nexus is responding...
+                </span>
               )}
             </div>
 
             <div ref={scrollRef} className="flex-1 overflow-y-auto p-5 space-y-5">
               {messages.length === 0 && !streamingText && (
-                <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-                  {mode === "voice" ? "Press the mic button and speak..." : "Type your message below..."}
+                <div className="flex flex-col items-center justify-center h-full gap-6 text-center">
+                  <div className="space-y-2">
+                    <Bot className="w-10 h-10 text-primary/40 mx-auto" />
+                    <p className="text-muted-foreground text-sm">
+                      {mode === "voice" ? "Press the mic button to start talking..." : "Describe your issue below or pick a quick option:"}
+                    </p>
+                  </div>
+                  {mode === "text" && (
+                    <div className="grid grid-cols-2 gap-2 w-full max-w-md">
+                      {QUICK_SUGGESTIONS.map((s) => (
+                        <button
+                          key={s.label}
+                          onClick={() => sendTextMessage(s.text)}
+                          data-testid={`chip-${s.label.toLowerCase().replace(/\s+/g, "-")}`}
+                          className="flex items-center gap-2 p-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-primary/30 transition-all text-left"
+                        >
+                          <s.icon className="w-4 h-4 text-primary shrink-0" />
+                          <span className="text-xs font-medium">{s.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -274,7 +369,7 @@ export default function CustomerSupport() {
                     )}
                   >
                     <div className={cn(
-                      "w-8 h-8 rounded-xl flex items-center justify-center shrink-0",
+                      "w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5",
                       msg.role === "user"
                         ? "bg-secondary/20 border border-secondary/40"
                         : "bg-primary/20 border border-primary/40"
@@ -302,7 +397,7 @@ export default function CustomerSupport() {
                   animate={{ opacity: 1, y: 0 }}
                   className="flex gap-3 max-w-[88%]"
                 >
-                  <div className="w-8 h-8 rounded-xl bg-primary/20 border border-primary/40 flex items-center justify-center shrink-0">
+                  <div className="w-8 h-8 rounded-xl bg-primary/20 border border-primary/40 flex items-center justify-center shrink-0 mt-0.5">
                     <Bot className="w-4 h-4 text-primary animate-pulse" />
                   </div>
                   <div className="px-4 py-3 rounded-2xl bg-white/5 border border-white/10 rounded-tl-sm text-sm leading-relaxed">
@@ -315,31 +410,48 @@ export default function CustomerSupport() {
 
             {/* Text input */}
             {mode === "text" && (
-              <div className="p-4 border-t border-white/10 bg-black/20 flex gap-3 items-end">
-                <textarea
-                  value={textInput}
-                  onChange={(e) => setTextInput(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  disabled={isSending}
-                  data-testid="input-message"
-                  placeholder="Describe your issue... (Enter to send)"
-                  className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/40 resize-none h-12 max-h-32"
-                  rows={1}
-                />
-                <Button
-                  onClick={sendTextMessage}
-                  disabled={!textInput.trim() || isSending}
-                  size="icon"
-                  data-testid="button-send"
-                  className="shrink-0 w-12 h-12 rounded-xl"
-                >
-                  {isSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                </Button>
+              <div className="p-4 border-t border-white/10 bg-black/20 space-y-3">
+                {messages.length > 0 && (
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {QUICK_SUGGESTIONS.map((s) => (
+                      <button
+                        key={s.label}
+                        onClick={() => sendTextMessage(s.text)}
+                        disabled={isSending}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 hover:border-primary/30 transition-all text-xs whitespace-nowrap"
+                      >
+                        <s.icon className="w-3 h-3 text-primary" />
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className="flex gap-3 items-end">
+                  <textarea
+                    value={textInput}
+                    onChange={(e) => setTextInput(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    disabled={isSending}
+                    data-testid="input-message"
+                    placeholder="Describe your issue... (Enter to send)"
+                    className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/40 resize-none h-12"
+                    rows={1}
+                  />
+                  <Button
+                    onClick={() => sendTextMessage()}
+                    disabled={!textInput.trim() || isSending}
+                    size="icon"
+                    data-testid="button-send"
+                    className="shrink-0 w-12 h-12 rounded-xl"
+                  >
+                    {isSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  </Button>
+                </div>
               </div>
             )}
           </div>
 
-          {/* Voice controls panel (voice mode only) */}
+          {/* Voice controls panel */}
           {mode === "voice" && (
             <div className="w-56 flex flex-col gap-4">
               <div className="glass-panel rounded-2xl flex-1 flex flex-col items-center justify-center gap-6 p-6 relative overflow-hidden">
@@ -384,12 +496,12 @@ export default function CustomerSupport() {
               </div>
 
               <div className="glass-panel rounded-2xl p-4 space-y-3">
-                <div className="flex items-center gap-2 mb-3">
-                  <Activity className="w-4 h-4 text-secondary" />
-                  <span className="text-xs font-semibold uppercase tracking-wider">Status</span>
+                <div className="flex items-center gap-2 mb-1">
+                  <Activity className="w-3.5 h-3.5 text-secondary" />
+                  <span className="text-xs font-semibold uppercase tracking-wider">Link Status</span>
                 </div>
                 {[
-                  { label: "Link", value: "Stable", color: "text-green-400" },
+                  { label: "Connection", value: "Stable", color: "text-green-400" },
                   { label: "Latency", value: "~24ms", color: "text-primary" },
                   { label: "Auth", value: "Verified", color: "text-green-400" },
                   { label: "Model", value: "gpt-audio", color: "text-secondary" },
