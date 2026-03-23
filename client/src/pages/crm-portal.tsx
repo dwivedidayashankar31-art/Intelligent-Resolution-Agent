@@ -1,21 +1,20 @@
 import { useState } from "react";
 import { SidebarLayout } from "@/components/layout";
 import { useCustomers, useTickets, useActions, useTriggerAction, useStats } from "@/hooks/use-crm";
-import { Button } from "@/components/ui/button";
-import { Users, Ticket, Activity, Plus, ShieldAlert, KeyRound, RefreshCcw, RefreshCw, Loader2, X, CheckCircle, AlertCircle } from "lucide-react";
-import { format, formatDistanceToNow } from "date-fns";
+import { Users, Activity, Plus, ShieldAlert, KeyRound, RefreshCcw, RefreshCw, Loader2, X, CheckCircle, AlertCircle, Ticket, TrendingUp } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
-import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
+import { Button } from "@/components/ui/button";
 
-const ACTION_CONFIG: Record<string, { label: string; icon: any; color: string; hex: string }> = {
-  refund: { label: "Issue Refund", icon: RefreshCcw, color: "rgba(34,197,94,0.85)", hex: "#22C55E" },
-  password_reset: { label: "Password Reset", icon: KeyRound, color: "rgba(0,240,255,0.85)", hex: "#00F0FF" },
-  escalate: { label: "Escalate", icon: ShieldAlert, color: "rgba(239,68,68,0.85)", hex: "#EF4444" },
-  update_crm: { label: "Update CRM", icon: RefreshCw, color: "rgba(138,43,226,0.85)", hex: "#8A2BE2" },
+const ACTION_CONFIG: Record<string, { label: string; icon: any; badgeClass: string; dotColor: string }> = {
+  refund: { label: "Refund", icon: RefreshCcw, badgeClass: "badge-green", dotColor: "#4ADE80" },
+  password_reset: { label: "Password Reset", icon: KeyRound, badgeClass: "badge-blue", dotColor: "#60A5FA" },
+  escalate: { label: "Escalate", icon: ShieldAlert, badgeClass: "badge-red", dotColor: "#F87171" },
+  update_crm: { label: "CRM Update", icon: RefreshCw, badgeClass: "badge-purple", dotColor: "#A78BFA" },
 };
 
-const CHART_COLORS = ["#22C55E", "#00F0FF", "#EF4444", "#8A2BE2"];
+const CHART_COLORS = ["#4ADE80", "#60A5FA", "#F87171", "#A78BFA"];
 
 function ActionDialog({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const [ticketId, setTicketId] = useState("");
@@ -30,145 +29,105 @@ function ActionDialog({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
       await trigger.mutateAsync({ ticketId: parseInt(ticketId), actionType, details });
       setSuccess(true);
       setTimeout(() => { setSuccess(false); onClose(); setTicketId(""); setDetails(""); }, 1500);
-    } catch (err) {
-      console.error(err);
-    }
+    } catch (err) { console.error(err); }
   };
 
   if (!isOpen) return null;
-
   const cfg = ACTION_CONFIG[actionType] || ACTION_CONFIG.refund;
   const Icon = cfg.icon;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(12px)" }}>
+      style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(8px)" }}>
       <motion.div
-        initial={{ opacity: 0, scale: 0.94, y: 12 }}
+        initial={{ opacity: 0, scale: 0.95, y: 10 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.94, y: 12 }}
-        transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-        className="w-full max-w-md rounded-2xl p-6 relative overflow-hidden"
+        exit={{ opacity: 0, scale: 0.95 }}
+        transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+        className="w-full max-w-md rounded-2xl overflow-hidden"
         style={{
-          background: "rgba(18,18,18,0.98)",
+          background: "hsl(240, 8%, 6.5%)",
           border: "1px solid rgba(255,255,255,0.1)",
-          boxShadow: "0 24px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04)"
+          boxShadow: "0 24px 64px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04)"
         }}
       >
-        <div className="absolute top-0 left-0 right-0 h-px"
-          style={{ background: "linear-gradient(90deg, transparent, rgba(0,240,255,0.2), rgba(138,43,226,0.2), transparent)" }} />
+        {/* Header top-line gradient */}
+        <div className="h-px" style={{ background: "linear-gradient(90deg, transparent, rgba(59,130,246,0.4), rgba(139,92,246,0.4), transparent)" }} />
 
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="font-display font-bold text-lg text-white">Simulate AI Action</h2>
+        <div className="px-6 py-5 flex items-center justify-between" style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+          <h2 className="font-bold text-[15px] text-white tracking-tight">Simulate AI Action</h2>
           <button onClick={onClose}
-            className="w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-150"
-            style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.5)" }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.9)"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.5)"; }}
+            className="w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-150"
+            style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.4)" }}
+            onMouseEnter={(e) => (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.85)"}
+            onMouseLeave={(e) => (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.4)"}
           >
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
 
-        {success ? (
-          <div className="flex flex-col items-center py-8 gap-3">
-            <div className="w-14 h-14 rounded-full flex items-center justify-center"
-              style={{ background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.25)" }}>
-              <CheckCircle className="w-7 h-7" style={{ color: "#22C55E" }} />
-            </div>
-            <p className="font-semibold text-sm" style={{ color: "#22C55E" }}>Action executed successfully</p>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {[
-              {
-                label: "Ticket ID",
-                content: (
-                  <input
-                    type="number"
-                    required
-                    data-testid="input-ticket-id"
-                    className="w-full rounded-xl px-4 py-3 text-sm text-white focus:outline-none transition-all duration-200"
-                    style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}
-                    onFocus={(e) => { e.currentTarget.style.borderColor = "rgba(0,240,255,0.25)"; }}
-                    onBlur={(e) => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; }}
-                    value={ticketId}
-                    onChange={(e) => setTicketId(e.target.value)}
-                    placeholder="e.g. 1"
-                  />
-                )
-              },
-              {
-                label: "Action Type",
-                content: (
-                  <select
-                    data-testid="select-action-type"
-                    className="w-full rounded-xl px-4 py-3 text-sm text-white focus:outline-none transition-all duration-200 appearance-none"
-                    style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}
-                    onFocus={(e) => { e.currentTarget.style.borderColor = "rgba(0,240,255,0.25)"; }}
-                    onBlur={(e) => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; }}
-                    value={actionType}
-                    onChange={(e) => setActionType(e.target.value)}
-                  >
-                    {Object.entries(ACTION_CONFIG).map(([value, c]) => (
-                      <option key={value} value={value} style={{ background: "#111" }}>{c.label}</option>
-                    ))}
-                  </select>
-                )
-              }
-            ].map((field) => (
-              <div key={field.label}>
-                <label className="block text-[10px] font-mono uppercase tracking-[0.15em] mb-1.5"
-                  style={{ color: "rgba(255,255,255,0.35)" }}>{field.label}</label>
-                {field.content}
+        <div className="p-6">
+          {success ? (
+            <div className="flex flex-col items-center py-8 gap-3">
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center"
+                style={{ background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.2)" }}>
+                <CheckCircle className="w-6 h-6" style={{ color: "#4ADE80" }} />
               </div>
-            ))}
-
-            <div className="flex items-center gap-3 px-4 py-3 rounded-xl"
-              style={{
-                background: `rgba(${cfg.hex === "#22C55E" ? "34,197,94" : cfg.hex === "#00F0FF" ? "0,240,255" : cfg.hex === "#EF4444" ? "239,68,68" : "138,43,226"},0.06)`,
-                border: `1px solid ${cfg.hex}25`
-              }}>
-              <Icon className="w-4 h-4 shrink-0" style={{ color: cfg.color }} />
-              <span className="text-sm" style={{ color: cfg.color }}>Selected: {cfg.label}</span>
+              <p className="font-semibold text-[13px]" style={{ color: "#4ADE80" }}>Action executed successfully</p>
             </div>
-
-            <div>
-              <label className="block text-[10px] font-mono uppercase tracking-[0.15em] mb-1.5"
-                style={{ color: "rgba(255,255,255,0.35)" }}>Details / Notes</label>
-              <textarea
-                required
-                data-testid="input-action-details"
-                className="w-full rounded-xl px-4 py-3 text-sm text-white h-24 resize-none focus:outline-none transition-all duration-200"
-                style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}
-                onFocus={(e) => { e.currentTarget.style.borderColor = "rgba(0,240,255,0.25)"; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; }}
-                value={details}
-                onChange={(e) => setDetails(e.target.value)}
-                placeholder="Reason or context for this action..."
-              />
-            </div>
-
-            <div className="flex gap-3 justify-end pt-1">
-              <Button type="button" variant="ghost" size="sm" onClick={onClose}
-                className="text-white/50 hover:text-white/80">Cancel</Button>
-              <Button type="submit" size="sm" isLoading={trigger.isPending} data-testid="button-execute-action">
-                Execute Action
-              </Button>
-            </div>
-          </form>
-        )}
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="section-label block mb-1.5">Ticket ID</label>
+                <input type="number" required data-testid="input-ticket-id"
+                  className="input-field"
+                  value={ticketId} onChange={(e) => setTicketId(e.target.value)} placeholder="e.g. 1" />
+              </div>
+              <div>
+                <label className="section-label block mb-1.5">Action Type</label>
+                <select data-testid="select-action-type"
+                  className="input-field appearance-none"
+                  value={actionType} onChange={(e) => setActionType(e.target.value)}
+                  style={{ backgroundImage: "none" }}>
+                  {Object.entries(ACTION_CONFIG).map(([v, c]) => (
+                    <option key={v} value={v} style={{ background: "#111" }}>{c.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl"
+                style={{ background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                <Icon className="w-3.5 h-3.5 shrink-0" style={{ color: cfg.dotColor }} />
+                <span className={`badge ${cfg.badgeClass}`}>{cfg.label}</span>
+                <span className="text-[11px] ml-auto" style={{ color: "rgba(255,255,255,0.3)" }}>Selected action</span>
+              </div>
+              <div>
+                <label className="section-label block mb-1.5">Details / Notes</label>
+                <textarea required data-testid="input-action-details"
+                  className="input-field resize-none"
+                  style={{ height: 88 }}
+                  value={details} onChange={(e) => setDetails(e.target.value)}
+                  placeholder="Reason or context for this action..." />
+              </div>
+              <div className="flex gap-2.5 justify-end pt-1">
+                <button type="button" onClick={onClose} className="btn-ghost text-[12px]" style={{ padding: "7px 14px" }}>Cancel</button>
+                <Button type="submit" size="sm" isLoading={trigger.isPending} data-testid="button-execute-action">
+                  Execute Action
+                </Button>
+              </div>
+            </form>
+          )}
+        </div>
       </motion.div>
     </div>
   );
 }
 
-const STAT_CONFIG = [
-  { key: "customers", label: "Total Customers", icon: Users, accentRgb: "0,240,255", hex: "#00F0FF" },
-  { key: "openTickets", label: "Open Tickets", icon: Ticket, accentRgb: "234,179,8", hex: "#EAB308" },
-  { key: "escalated", label: "Escalated", icon: ShieldAlert, accentRgb: "239,68,68", hex: "#EF4444" },
-  { key: "resolved", label: "Resolved", icon: CheckCircle, accentRgb: "34,197,94", hex: "#22C55E" },
-  { key: "actions", label: "AI Actions", icon: Activity, accentRgb: "138,43,226", hex: "#8A2BE2" },
+const STATS = [
+  { key: "customers", label: "Total Customers", icon: Users, color: "#60A5FA", bg: "rgba(59,130,246,0.08)", border: "rgba(59,130,246,0.15)" },
+  { key: "openTickets", label: "Open Tickets", icon: Ticket, color: "#FBBF24", bg: "rgba(234,179,8,0.06)", border: "rgba(234,179,8,0.14)" },
+  { key: "escalated", label: "Escalated", icon: ShieldAlert, color: "#F87171", bg: "rgba(239,68,68,0.06)", border: "rgba(239,68,68,0.14)" },
+  { key: "resolved", label: "Resolved", icon: CheckCircle, color: "#4ADE80", bg: "rgba(34,197,94,0.06)", border: "rgba(34,197,94,0.14)" },
+  { key: "actions", label: "AI Actions", icon: Activity, color: "#A78BFA", bg: "rgba(139,92,246,0.08)", border: "rgba(139,92,246,0.15)" },
 ];
 
 export default function CrmPortal() {
@@ -178,113 +137,97 @@ export default function CrmPortal() {
   const { data: stats } = useStats();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  const customerMap = customers?.reduce((acc: Record<number, string>, c) => {
-    acc[c.id] = c.name;
-    return acc;
-  }, {});
-
-  const actionCounts = actions?.reduce((acc: Record<string, number>, action) => {
-    acc[action.actionType] = (acc[action.actionType] || 0) + 1;
-    return acc;
+  const actionCounts = actions?.reduce((acc: Record<string, number>, a) => {
+    acc[a.actionType] = (acc[a.actionType] || 0) + 1; return acc;
   }, {});
 
   const chartData = actionCounts
-    ? Object.entries(actionCounts).map(([name, value]) => ({
-        name: ACTION_CONFIG[name]?.label || name,
-        value,
-      }))
+    ? Object.entries(actionCounts).map(([name, value]) => ({ name: ACTION_CONFIG[name]?.label || name, value }))
     : [];
 
-  const recentActions = [...(actions || [])].reverse().slice(0, 10);
+  const recentActions = [...(actions || [])].reverse().slice(0, 12);
 
-  const getStatValue = (key: string) => {
+  const getVal = (key: string) => {
     if (!stats) return 0;
-    if (key === "customers") return stats.customers ?? customers?.length ?? 0;
-    if (key === "openTickets") return stats.openTickets ?? 0;
-    if (key === "escalated") return stats.escalated ?? 0;
-    if (key === "resolved") return stats.resolved ?? 0;
-    if (key === "actions") return stats.actions ?? actions?.length ?? 0;
-    return 0;
+    const map: Record<string, number> = {
+      customers: stats.customers ?? customers?.length ?? 0,
+      openTickets: stats.openTickets ?? 0,
+      escalated: stats.escalated ?? 0,
+      resolved: stats.resolved ?? 0,
+      actions: stats.actions ?? actions?.length ?? 0,
+    };
+    return map[key] ?? 0;
   };
 
   return (
     <SidebarLayout>
-      <div className="max-w-7xl mx-auto space-y-6 pb-12">
-        <div className="flex items-center justify-between">
+      <div className="px-7 pt-6 pb-10 max-w-[1300px] mx-auto space-y-6">
+
+        {/* Page header */}
+        <div className="flex items-start justify-between">
           <div>
-            <h1 className="font-display font-bold text-3xl text-white leading-tight">CRM Portal</h1>
-            <p className="text-sm mt-1" style={{ color: "rgba(255,255,255,0.35)" }}>
-              Autonomous agent activity and customer management
-            </p>
+            <h1 className="font-bold text-white mb-1" style={{ fontSize: 22, letterSpacing: "-0.03em" }}>CRM Portal</h1>
+            <p className="text-[13px]" style={{ color: "rgba(255,255,255,0.4)" }}>Agent activity, customer management & analytics</p>
           </div>
           <motion.button
             onClick={() => setIsDialogOpen(true)}
             data-testid="button-trigger-action"
-            whileHover={{ scale: 1.02 }}
+            whileHover={{ y: -1 }}
             whileTap={{ scale: 0.98 }}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200"
-            style={{
-              background: "linear-gradient(135deg, rgba(0,240,255,0.12), rgba(138,43,226,0.12))",
-              border: "1px solid rgba(0,240,255,0.2)",
-              color: "rgba(0,240,255,0.9)",
-              boxShadow: "0 0 20px rgba(0,240,255,0.06)"
-            }}
+            className="btn-primary"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-3.5 h-3.5" />
             Trigger Mock Action
           </motion.button>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          {STAT_CONFIG.map((stat, i) => (
+        {/* KPI Cards */}
+        <div className="grid grid-cols-5 gap-3">
+          {STATS.map((s, i) => (
             <motion.div
-              key={stat.key}
-              initial={{ opacity: 0, y: 16 }}
+              key={s.key}
+              initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: i * 0.06, ease: [0.22, 1, 0.36, 1] }}
-              className="relative rounded-2xl p-5 overflow-hidden card-hover"
-              style={{
-                background: "rgba(255,255,255,0.025)",
-                border: "1px solid rgba(255,255,255,0.07)",
-              }}
+              transition={{ duration: 0.35, delay: i * 0.05, ease: [0.22, 1, 0.36, 1] }}
+              className="rounded-xl p-5 relative overflow-hidden"
+              style={{ background: s.bg, border: `1px solid ${s.border}` }}
             >
-              <div className="absolute top-0 left-0 right-0 h-px rounded-t-2xl"
-                style={{ background: `linear-gradient(90deg, transparent, ${stat.hex}40, transparent)` }} />
-              <div className="absolute top-0 right-0 w-16 h-16 pointer-events-none"
-                style={{ background: `radial-gradient(ellipse at top right, rgba(${stat.accentRgb},0.08), transparent 70%)` }} />
-              <p className="text-[9px] font-mono uppercase tracking-[0.15em] mb-3"
-                style={{ color: "rgba(255,255,255,0.3)" }}>{stat.label}</p>
-              <h3 className="text-3xl font-display font-bold" style={{ color: stat.hex }}>
-                {getStatValue(stat.key)}
-              </h3>
-              <stat.icon className="absolute bottom-4 right-4 w-7 h-7 opacity-[0.06]"
-                style={{ color: stat.hex }} />
+              <div className="flex items-start justify-between mb-3">
+                <p className="section-label">{s.label}</p>
+                <s.icon className="w-4 h-4 opacity-60" style={{ color: s.color }} />
+              </div>
+              <div className="stat-value" style={{ color: s.color }}>{getVal(s.key)}</div>
             </motion.div>
           ))}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          <div className="lg:col-span-2 rounded-2xl overflow-hidden flex flex-col"
-            style={{ background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.07)" }}>
-            <div className="px-5 py-4 flex items-center justify-between"
-              style={{ borderBottom: "1px solid rgba(255,255,255,0.05)", background: "rgba(255,255,255,0.01)" }}>
-              <h3 className="font-semibold text-sm text-white">Recent Agent Actions</h3>
-              <span className="text-[10px] px-2.5 py-1 rounded-lg font-mono"
-                style={{
-                  background: "rgba(0,240,255,0.06)",
-                  color: "rgba(0,240,255,0.7)",
-                  border: "1px solid rgba(0,240,255,0.15)"
-                }}>
-                Live Feed
+        {/* Middle row: Table + Chart */}
+        <div className="grid grid-cols-3 gap-5">
+
+          {/* Actions Table */}
+          <div className="col-span-2 rounded-xl overflow-hidden"
+            style={{ background: "hsl(240, 6%, 7%)", border: "1px solid rgba(255,255,255,0.07)" }}>
+            <div className="flex items-center justify-between px-5 py-3.5"
+              style={{ borderBottom: "1px solid rgba(255,255,255,0.065)" }}>
+              <div className="flex items-center gap-2.5">
+                <h3 className="font-semibold text-[13px] text-white">Agent Actions</h3>
+                <span className="badge badge-blue">
+                  <span className="status-dot status-online w-1.5 h-1.5 animate-pulse-dot" />
+                  Live
+                </span>
+              </div>
+              <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.25)" }}>
+                {recentActions.length} recent
               </span>
             </div>
-            <div className="overflow-x-auto flex-1 scrollbar-hide">
-              <table className="w-full text-sm text-left">
+
+            <div className="overflow-x-auto">
+              <table className="w-full">
                 <thead>
-                  <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.05)", background: "rgba(255,255,255,0.02)" }}>
+                  <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.055)" }}>
                     {["Time", "Ticket", "Action", "Details"].map((h) => (
-                      <th key={h} className="px-5 py-3 text-[9px] font-mono uppercase tracking-[0.15em]"
-                        style={{ color: "rgba(255,255,255,0.25)" }}>{h}</th>
+                      <th key={h} className="px-5 py-3 text-left section-label font-medium"
+                        style={{ background: "rgba(255,255,255,0.015)" }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -296,41 +239,30 @@ export default function CrmPortal() {
                       return (
                         <motion.tr
                           key={action.id}
-                          initial={{ opacity: 0, x: -8 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ duration: 0.2 }}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
                           data-testid={`row-action-${action.id}`}
-                          style={{ borderBottom: "1px solid rgba(255,255,255,0.03)" }}
-                          className="transition-colors duration-100"
-                          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.02)"; }}
-                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+                          className="transition-colors duration-100 cursor-default"
+                          style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}
+                          onMouseEnter={(e) => (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.018)"}
+                          onMouseLeave={(e) => (e.currentTarget as HTMLElement).style.background = "transparent"}
                         >
-                          <td className="px-5 py-3.5 whitespace-nowrap text-[11px] font-mono"
+                          <td className="px-5 py-3.5 text-[11px] font-mono whitespace-nowrap"
                             style={{ color: "rgba(255,255,255,0.3)" }}>
                             {action.createdAt ? formatDistanceToNow(new Date(action.createdAt), { addSuffix: true }) : "—"}
                           </td>
                           <td className="px-5 py-3.5 whitespace-nowrap">
-                            <span className="font-mono text-[11px] px-2 py-1 rounded-lg"
-                              style={{ background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.55)" }}>
-                              #{action.ticketId ?? "N/A"}
-                            </span>
+                            <span className="badge badge-neutral font-mono text-[10px]">#{action.ticketId ?? "N/A"}</span>
                           </td>
                           <td className="px-5 py-3.5 whitespace-nowrap">
                             {cfg ? (
-                              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-medium"
-                                style={{
-                                  background: `rgba(${cfg.hex === "#22C55E" ? "34,197,94" : cfg.hex === "#00F0FF" ? "0,240,255" : cfg.hex === "#EF4444" ? "239,68,68" : "138,43,226"},0.06)`,
-                                  borderColor: `${cfg.hex}20`,
-                                  color: cfg.color
-                                }}>
+                              <span className={`badge ${cfg.badgeClass}`}>
                                 <Icon className="w-3 h-3" />
                                 {cfg.label}
-                              </div>
-                            ) : (
-                              <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.5)" }}>{action.actionType}</span>
-                            )}
+                              </span>
+                            ) : <span className="text-[11px] text-white/40">{action.actionType}</span>}
                           </td>
-                          <td className="px-5 py-3.5 text-[11px] truncate max-w-[180px]"
+                          <td className="px-5 py-3.5 text-[11px] truncate max-w-[200px]"
                             style={{ color: "rgba(255,255,255,0.35)" }} title={action.details}>
                             {action.details}
                           </td>
@@ -340,9 +272,9 @@ export default function CrmPortal() {
                   </AnimatePresence>
                   {(!actions || actions.length === 0) && (
                     <tr>
-                      <td colSpan={4} className="px-5 py-14 text-center">
-                        <Activity className="w-8 h-8 mx-auto mb-3" style={{ color: "rgba(255,255,255,0.1)" }} />
-                        <p className="text-sm" style={{ color: "rgba(255,255,255,0.25)" }}>
+                      <td colSpan={4} className="px-5 py-12 text-center">
+                        <Activity className="w-7 h-7 mx-auto mb-2.5" style={{ color: "rgba(255,255,255,0.1)" }} />
+                        <p className="text-[12px]" style={{ color: "rgba(255,255,255,0.3)" }}>
                           No actions yet. Talk to the AI agent or trigger a mock action.
                         </p>
                       </td>
@@ -353,107 +285,97 @@ export default function CrmPortal() {
             </div>
           </div>
 
-          <div className="rounded-2xl p-5 flex flex-col"
-            style={{ background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.07)" }}>
-            <h3 className="font-semibold text-sm text-white mb-4">Action Breakdown</h3>
-            <div className="flex-1 min-h-[220px]">
+          {/* Chart */}
+          <div className="rounded-xl p-5 flex flex-col"
+            style={{ background: "hsl(240, 6%, 7%)", border: "1px solid rgba(255,255,255,0.07)" }}>
+            <div className="mb-4">
+              <h3 className="font-semibold text-[13px] text-white">Action Breakdown</h3>
+              <p className="text-[11px] mt-0.5" style={{ color: "rgba(255,255,255,0.3)" }}>Distribution by type</p>
+            </div>
+            <div className="flex-1 min-h-[200px]">
               {chartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={chartData} cx="50%" cy="45%" innerRadius={52} outerRadius={72}
+                    <Pie data={chartData} cx="50%" cy="42%" innerRadius={48} outerRadius={68}
                       paddingAngle={3} dataKey="value" stroke="none">
                       {chartData.map((_, i) => (
                         <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} fillOpacity={0.85} />
                       ))}
                     </Pie>
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "rgba(14,14,14,0.98)",
-                        borderColor: "rgba(255,255,255,0.1)",
-                        borderRadius: "12px",
-                        fontSize: "12px",
-                        boxShadow: "0 8px 32px rgba(0,0,0,0.5)"
-                      }}
-                      itemStyle={{ color: "rgba(255,255,255,0.8)" }}
-                    />
-                    <Legend verticalAlign="bottom" height={36} iconType="circle" iconSize={7}
-                      wrapperStyle={{ fontSize: "11px", color: "rgba(255,255,255,0.45)" }} />
+                    <Tooltip contentStyle={{
+                      backgroundColor: "hsl(240,8%,8%)", borderColor: "rgba(255,255,255,0.1)",
+                      borderRadius: "10px", fontSize: "11px", boxShadow: "0 8px 24px rgba(0,0,0,0.5)"
+                    }} itemStyle={{ color: "rgba(255,255,255,0.8)" }} />
+                    <Legend verticalAlign="bottom" height={32} iconType="circle" iconSize={7}
+                      wrapperStyle={{ fontSize: "10px", color: "rgba(255,255,255,0.4)" }} />
                   </PieChart>
                 </ResponsiveContainer>
               ) : (
                 <div className="flex flex-col items-center justify-center h-full gap-2">
-                  <AlertCircle className="w-8 h-8" style={{ color: "rgba(255,255,255,0.1)" }} />
-                  <span className="text-sm" style={{ color: "rgba(255,255,255,0.25)" }}>No data yet</span>
+                  <AlertCircle className="w-7 h-7" style={{ color: "rgba(255,255,255,0.1)" }} />
+                  <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.25)" }}>No data yet</span>
                 </div>
               )}
             </div>
           </div>
         </div>
 
-        <div className="rounded-2xl overflow-hidden"
-          style={{ background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.07)" }}>
-          <div className="px-5 py-4 flex items-center gap-2.5"
-            style={{ borderBottom: "1px solid rgba(255,255,255,0.05)", background: "rgba(255,255,255,0.01)" }}>
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center"
-              style={{ background: "rgba(0,240,255,0.08)", border: "1px solid rgba(0,240,255,0.15)" }}>
-              <Users className="w-3.5 h-3.5" style={{ color: "rgba(0,240,255,0.8)" }} />
+        {/* Customers */}
+        <div className="rounded-xl overflow-hidden"
+          style={{ background: "hsl(240, 6%, 7%)", border: "1px solid rgba(255,255,255,0.07)" }}>
+          <div className="flex items-center justify-between px-5 py-3.5"
+            style={{ borderBottom: "1px solid rgba(255,255,255,0.065)" }}>
+            <div className="flex items-center gap-2.5">
+              <h3 className="font-semibold text-[13px] text-white">Customers</h3>
+              <span className="badge badge-neutral font-mono">{customers?.length ?? 0} total</span>
             </div>
-            <h3 className="font-semibold text-sm text-white">Registered Customers</h3>
-            <span className="ml-2 text-[10px] px-2 py-0.5 rounded-lg font-mono"
-              style={{ background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.35)" }}>
-              {customers?.length ?? 0} total
-            </span>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-5">
+          <div className="grid grid-cols-3 gap-px" style={{ background: "rgba(255,255,255,0.04)" }}>
             {customers?.map((customer) => {
               const customerTickets = tickets?.filter((t) => t.customerId === customer.id) || [];
+              const open = customerTickets.filter(t => t.status === "open").length;
+              const escalated = customerTickets.filter(t => t.status === "escalated").length;
+
               return (
                 <motion.div
                   key={customer.id}
                   data-testid={`card-customer-${customer.id}`}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="p-4 rounded-xl card-hover cursor-default"
-                  style={{
-                    background: "rgba(255,255,255,0.02)",
-                    border: "1px solid rgba(255,255,255,0.06)"
-                  }}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="p-5 cursor-default transition-colors duration-150"
+                  style={{ background: "hsl(240, 6%, 7%)" }}
+                  onMouseEnter={(e) => (e.currentTarget as HTMLElement).style.background = "hsl(240, 6%, 8.5%)"}
+                  onMouseLeave={(e) => (e.currentTarget as HTMLElement).style.background = "hsl(240, 6%, 7%)"}
                 >
                   <div className="flex items-center gap-3 mb-3">
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm"
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-[13px] shrink-0"
                       style={{
-                        background: "linear-gradient(135deg, rgba(0,240,255,0.1), rgba(138,43,226,0.1))",
-                        border: "1px solid rgba(0,240,255,0.15)",
-                        color: "rgba(0,240,255,0.8)"
+                        background: "linear-gradient(135deg, rgba(59,130,246,0.15), rgba(139,92,246,0.15))",
+                        border: "1px solid rgba(59,130,246,0.2)",
+                        color: "#60A5FA"
                       }}>
                       {customer.name.charAt(0)}
                     </div>
                     <div className="min-w-0">
-                      <div className="font-semibold text-sm text-white truncate">{customer.name}</div>
-                      <div className="text-[11px] truncate" style={{ color: "rgba(255,255,255,0.35)" }}>{customer.email}</div>
+                      <div className="font-semibold text-[13px] text-white truncate">{customer.name}</div>
+                      <div className="text-[11px] truncate mt-0.5" style={{ color: "rgba(255,255,255,0.35)" }}>{customer.email}</div>
                     </div>
                   </div>
-                  {customer.phone && (
-                    <div className="text-[10px] font-mono mb-2" style={{ color: "rgba(255,255,255,0.25)" }}>{customer.phone}</div>
-                  )}
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {customerTickets.map((t) => (
-                      <span
-                        key={t.id}
-                        className="text-[9px] px-2 py-0.5 rounded-full border font-medium"
-                        style={
-                          t.status === "open"
-                            ? { background: "rgba(0,240,255,0.06)", color: "rgba(0,240,255,0.7)", borderColor: "rgba(0,240,255,0.15)" }
-                            : t.status === "resolved"
-                            ? { background: "rgba(34,197,94,0.06)", color: "rgba(34,197,94,0.7)", borderColor: "rgba(34,197,94,0.15)" }
-                            : { background: "rgba(239,68,68,0.06)", color: "rgba(239,68,68,0.7)", borderColor: "rgba(239,68,68,0.15)" }
-                        }
-                      >
-                        #{t.id} {t.status}
+
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {open > 0 && (
+                      <span className="badge badge-yellow">{open} open</span>
+                    )}
+                    {escalated > 0 && (
+                      <span className="badge badge-red">{escalated} escalated</span>
+                    )}
+                    {customerTickets.filter(t => t.status === "resolved").length > 0 && (
+                      <span className="badge badge-green">
+                        {customerTickets.filter(t => t.status === "resolved").length} resolved
                       </span>
-                    ))}
+                    )}
                     {customerTickets.length === 0 && (
-                      <span className="text-[9px]" style={{ color: "rgba(255,255,255,0.2)" }}>No open tickets</span>
+                      <span className="badge badge-neutral">No tickets</span>
                     )}
                   </div>
                 </motion.div>

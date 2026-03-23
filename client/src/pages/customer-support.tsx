@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Waveform } from "@/components/waveform";
 import {
   Mic, Square, User, Bot, Activity, MessageSquare, Phone, Send,
-  Loader2, RefreshCcw, KeyRound, ShieldAlert, RefreshCw, Clock, ArrowRight, Sparkles
+  Loader2, RefreshCcw, KeyRound, ShieldAlert, RefreshCw, Clock,
+  ArrowRight, Sparkles, TrendingUp, Headphones
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -20,15 +21,8 @@ type Message = { role: "user" | "assistant"; content: string };
 const QUICK_SUGGESTIONS = [
   { icon: RefreshCcw, label: "Request a refund", text: "I'd like to request a refund for my recent order." },
   { icon: KeyRound, label: "Reset my password", text: "I can't log in and need to reset my password." },
-  { icon: ShieldAlert, label: "Escalate my issue", text: "This issue hasn't been resolved and I need to speak to a specialist." },
-  { icon: RefreshCw, label: "Update account info", text: "I need to update my account information." },
-];
-
-const CAPABILITIES = [
-  { label: "Refund Processing", desc: "Instant", color: "rgba(0,240,255,0.7)" },
-  { label: "Password Reset", desc: "Account recovery", color: "rgba(138,43,226,0.7)" },
-  { label: "CRM Updates", desc: "Real-time sync", color: "rgba(0,240,255,0.7)" },
-  { label: "Smart Escalation", desc: "Human handoff", color: "rgba(138,43,226,0.7)" },
+  { icon: ShieldAlert, label: "Escalate issue", text: "This issue hasn't been resolved and I need to speak to a specialist." },
+  { icon: RefreshCw, label: "Update account", text: "I need to update my account information." },
 ];
 
 export default function CustomerSupport() {
@@ -48,108 +42,66 @@ export default function CustomerSupport() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const voiceStream = useVoiceStream({
-    onUserTranscript: (text) => {
-      setMessages((prev) => [...prev, { role: "user", content: text }]);
-    },
-    onTranscript: (_, full) => {
-      streamRef.current = full;
-      setStreamingText(full);
-    },
+    onUserTranscript: (text) => setMessages((p) => [...p, { role: "user", content: text }]),
+    onTranscript: (_, full) => { streamRef.current = full; setStreamingText(full); },
     onComplete: () => {
-      setMessages((prev) => [...prev, { role: "assistant", content: streamRef.current }]);
-      streamRef.current = "";
-      setStreamingText("");
+      setMessages((p) => [...p, { role: "assistant", content: streamRef.current }]);
+      streamRef.current = ""; setStreamingText("");
       queryClient.invalidateQueries({ queryKey: ["/api/actions"] });
     },
   });
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, streamingText]);
 
   const startSession = async (selectedMode: "voice" | "text") => {
     try {
-      const conv = await createConv.mutateAsync(
-        selectedMode === "voice" ? "Voice Support Session" : "Text Support Session"
-      );
-      setConversationId(conv.id);
-      setMessages([]);
-      setMode(selectedMode);
-    } catch (e) {
-      console.error(e);
-    }
+      const conv = await createConv.mutateAsync(selectedMode === "voice" ? "Voice Support Session" : "Text Support Session");
+      setConversationId(conv.id); setMessages([]); setMode(selectedMode);
+    } catch (e) { console.error(e); }
   };
 
   const toggleRecording = async () => {
     if (!conversationId) return;
     if (recorder.state === "recording") {
-      try {
-        const blob = await recorder.stopRecording();
-        await voiceStream.streamVoiceResponse(`/api/conversations/${conversationId}/messages`, blob);
-      } catch (e) {
-        console.error("Voice stream failed:", e);
-      }
-    } else {
-      await recorder.startRecording();
-    }
+      const blob = await recorder.stopRecording();
+      await voiceStream.streamVoiceResponse(`/api/conversations/${conversationId}/messages`, blob);
+    } else { await recorder.startRecording(); }
   };
 
-  const sendTextMessage = async (overrideText?: string) => {
-    const content = (overrideText ?? textInput).trim();
+  const sendTextMessage = async (override?: string) => {
+    const content = (override ?? textInput).trim();
     if (!content || !conversationId || isSending) return;
     setTextInput("");
-    setMessages((prev) => [...prev, { role: "user", content }]);
-    setIsSending(true);
-    streamRef.current = "";
-
+    setMessages((p) => [...p, { role: "user", content }]);
+    setIsSending(true); streamRef.current = "";
     try {
       const res = await fetch(`/api/conversations/${conversationId}/text-messages`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content }),
       });
-
-      const reader = res.body?.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
+      const reader = res.body?.getReader(); const decoder = new TextDecoder(); let buffer = "";
       while (reader) {
-        const { done, value } = await reader.read();
-        if (done) break;
+        const { done, value } = await reader.read(); if (done) break;
         buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
+        const lines = buffer.split("\n"); buffer = lines.pop() || "";
         for (const line of lines) {
           if (!line.startsWith("data: ")) continue;
           try {
             const event = JSON.parse(line.slice(6));
-            if (event.type === "delta") {
-              streamRef.current += event.data;
-              setStreamingText(streamRef.current);
-            } else if (event.type === "done") {
-              setMessages((prev) => [...prev, { role: "assistant", content: event.full }]);
-              setStreamingText("");
-              streamRef.current = "";
+            if (event.type === "delta") { streamRef.current += event.data; setStreamingText(streamRef.current); }
+            else if (event.type === "done") {
+              setMessages((p) => [...p, { role: "assistant", content: event.full }]);
+              setStreamingText(""); streamRef.current = "";
               queryClient.invalidateQueries({ queryKey: ["/api/actions"] });
               queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
             }
           } catch {}
         }
       }
-    } catch (e) {
-      console.error("Text send failed:", e);
-    } finally {
-      setIsSending(false);
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendTextMessage();
-    }
+    } catch (e) { console.error(e); }
+    finally { setIsSending(false); }
   };
 
   const isAgentResponding = voiceStream.playbackState === "playing" || (isSending && streamingText.length > 0);
@@ -158,202 +110,165 @@ export default function CustomerSupport() {
   if (mode === "idle") {
     return (
       <SidebarLayout>
-        <div className="h-full flex gap-6 min-h-0">
-          <div className="w-56 shrink-0 flex flex-col gap-3">
-            <div className="rounded-2xl overflow-hidden flex flex-col"
-              style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)" }}>
-              <div className="px-4 py-3 flex items-center gap-2"
-                style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-                <Clock className="w-3.5 h-3.5" style={{ color: "rgba(0,240,255,0.6)" }} />
-                <span className="text-xs font-semibold text-white/70">Past Sessions</span>
-              </div>
-              <div className="overflow-y-auto max-h-64 scrollbar-hide">
-                {conversations && conversations.length > 0 ? (
-                  <div className="p-2 space-y-0.5">
-                    {[...(conversations as any[])].reverse().slice(0, 12).map((c: any) => (
-                      <div
-                        key={c.id}
-                        data-testid={`session-${c.id}`}
-                        className="flex items-start gap-2.5 p-2.5 rounded-xl cursor-default transition-all duration-150 hover:bg-white/[0.04]"
-                      >
-                        <div className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0"
-                          style={{ background: "rgba(0,240,255,0.5)" }} />
-                        <div className="min-w-0">
-                          <div className="text-[11px] font-medium text-white/70 truncate">{c.title}</div>
-                          <div className="text-[9px] font-mono mt-0.5" style={{ color: "rgba(255,255,255,0.25)" }}>
-                            {c.createdAt ? formatDistanceToNow(new Date(c.createdAt), { addSuffix: true }) : "#" + c.id}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="p-4 text-center text-[11px]" style={{ color: "rgba(255,255,255,0.25)" }}>
-                    No sessions yet
-                  </div>
-                )}
-              </div>
-            </div>
+        <div className="h-full flex" style={{ minHeight: 0 }}>
 
-            {stats && (
-              <div className="rounded-2xl p-4 space-y-2.5"
-                style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)" }}>
-                <div className="flex items-center gap-2 mb-3">
-                  <Activity className="w-3 h-3" style={{ color: "rgba(0,240,255,0.6)" }} />
-                  <span className="text-[10px] font-semibold uppercase tracking-widest"
-                    style={{ color: "rgba(255,255,255,0.4)" }}>Metrics</span>
+          {/* Left panel — hero */}
+          <div className="flex-1 flex flex-col justify-center px-12 py-10 relative overflow-hidden">
+            {/* Subtle gradient orbs */}
+            <div className="absolute top-0 right-0 w-96 h-96 pointer-events-none"
+              style={{ background: "radial-gradient(ellipse at top right, rgba(59,130,246,0.06) 0%, transparent 65%)" }} />
+            <div className="absolute bottom-0 left-0 w-64 h-64 pointer-events-none"
+              style={{ background: "radial-gradient(ellipse at bottom left, rgba(139,92,246,0.05) 0%, transparent 65%)" }} />
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+              className="max-w-xl relative z-10"
+            >
+              <div className="flex items-center gap-2 mb-8">
+                <span className="badge badge-blue">
+                  <span className="status-dot status-online w-1.5 h-1.5 animate-pulse-dot" />
+                  AI Agent Online
+                </span>
+                <span className="badge badge-neutral">GPT-4o Audio</span>
+              </div>
+
+              <h1 className="font-bold text-white mb-4"
+                style={{ fontSize: 42, letterSpacing: "-0.04em", lineHeight: 1.1 }}>
+                Autonomous customer
+                <br />
+                <span className="text-gradient-blue">resolution agent</span>
+              </h1>
+
+              <p className="text-[15px] leading-relaxed mb-10" style={{ color: "rgba(255,255,255,0.45)" }}>
+                Nexus handles refunds, password resets, CRM updates, and escalations in real time — via voice or text, instantly.
+              </p>
+
+              <div className="flex gap-3">
+                <motion.button
+                  onClick={() => startSession("voice")}
+                  disabled={createConv.isPending}
+                  data-testid="button-start-voice"
+                  whileHover={{ y: -1 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="flex items-center gap-2.5 px-5 py-3 rounded-xl text-white font-semibold text-[13px]"
+                  style={{
+                    background: "linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)",
+                    border: "1px solid rgba(255,255,255,0.15)",
+                    boxShadow: "0 4px 20px rgba(59,130,246,0.3), inset 0 1px 0 rgba(255,255,255,0.15)",
+                  }}
+                >
+                  <Headphones className="w-4 h-4" />
+                  Start Voice Session
+                </motion.button>
+
+                <motion.button
+                  onClick={() => startSession("text")}
+                  disabled={createConv.isPending}
+                  data-testid="button-start-text"
+                  whileHover={{ y: -1 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="btn-ghost"
+                  style={{ padding: "12px 20px", fontSize: 13 }}
+                >
+                  <MessageSquare className="w-4 h-4" />
+                  Chat via Text
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </motion.button>
+              </div>
+
+              {createConv.isPending && (
+                <div className="flex items-center gap-2 mt-4 text-[12px]" style={{ color: "rgba(96,165,250,0.8)" }}>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Initializing secure channel...
                 </div>
+              )}
+
+              <div className="grid grid-cols-4 gap-3 mt-10">
                 {[
-                  { label: "Customers", value: stats.customers, color: "rgba(255,255,255,0.8)" },
-                  { label: "Open Tickets", value: stats.openTickets, color: "rgba(0,240,255,0.8)" },
-                  { label: "Escalated", value: stats.escalated, color: "rgba(239,68,68,0.8)" },
-                  { label: "Resolved", value: stats.resolved, color: "rgba(34,197,94,0.8)" },
-                  { label: "AI Actions", value: stats.actions, color: "rgba(138,43,226,0.8)" },
-                ].map((s) => (
-                  <div key={s.label} className="flex justify-between items-center">
-                    <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.35)" }}>{s.label}</span>
-                    <span className="text-[11px] font-mono font-bold" style={{ color: s.color }}>{s.value}</span>
+                  { label: "Refund Processing", desc: "Instant" },
+                  { label: "Password Reset", desc: "Auto" },
+                  { label: "CRM Sync", desc: "Real-time" },
+                  { label: "Escalations", desc: "Smart" },
+                ].map((f) => (
+                  <div key={f.label} className="card-surface p-3.5">
+                    <div className="text-[11px] font-semibold text-white/70 mb-0.5">{f.label}</div>
+                    <div className="text-[10px]" style={{ color: "rgba(255,255,255,0.3)" }}>{f.desc}</div>
                   </div>
                 ))}
               </div>
-            )}
+            </motion.div>
           </div>
 
-          <div className="flex-1 flex flex-col items-center justify-center gap-10 min-w-0">
-            <motion.div
-              initial={{ opacity: 0, y: 24 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-              className="text-center max-w-lg"
-            >
-              <div className="relative inline-flex mb-8">
-                <div className="w-16 h-16 rounded-2xl flex items-center justify-center"
-                  style={{
-                    background: "linear-gradient(135deg, rgba(0,240,255,0.12), rgba(138,43,226,0.12))",
-                    border: "1px solid rgba(0,240,255,0.2)",
-                    boxShadow: "0 0 40px rgba(0,240,255,0.12), inset 0 1px 0 rgba(255,255,255,0.08)"
-                  }}>
-                  <Bot className="w-8 h-8" style={{ color: "rgba(0,240,255,0.9)" }} />
-                </div>
-                <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center"
-                  style={{ background: "linear-gradient(135deg, #00F0FF, #8A2BE2)" }}>
-                  <Sparkles className="w-2.5 h-2.5 text-black" />
-                </div>
-              </div>
-              <h1 className="font-display font-bold text-5xl mb-4 leading-tight">
-                <span className="text-gradient-white">Nexus AI</span>
-                <br />
-                <span className="text-gradient-primary">Agent</span>
-              </h1>
-              <p className="text-base leading-relaxed" style={{ color: "rgba(255,255,255,0.45)" }}>
-                Autonomous customer resolution. Handles refunds, resets, CRM updates, and escalations in real time — instantly.
-              </p>
-            </motion.div>
+          {/* Right panel — sidebar info */}
+          <div className="w-64 shrink-0 flex flex-col gap-3 px-5 py-6 overflow-y-auto scrollbar-hide"
+            style={{ borderLeft: "1px solid rgba(255,255,255,0.065)" }}>
 
-            <motion.div
-              initial={{ opacity: 0, y: 24 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.12, ease: [0.22, 1, 0.36, 1] }}
-              className="flex gap-4"
-            >
-              {[
-                {
-                  onClick: () => startSession("voice"),
-                  testId: "button-start-voice",
-                  icon: Phone,
-                  title: "Voice Mode",
-                  desc: "Speak naturally",
-                  accent: "#00F0FF",
-                  accentRgb: "0,240,255",
-                },
-                {
-                  onClick: () => startSession("text"),
-                  testId: "button-start-text",
-                  icon: MessageSquare,
-                  title: "Text Mode",
-                  desc: "Type your query",
-                  accent: "#8A2BE2",
-                  accentRgb: "138,43,226",
-                }
-              ].map((item) => (
-                <motion.button
-                  key={item.title}
-                  onClick={item.onClick}
-                  disabled={createConv.isPending}
-                  data-testid={item.testId}
-                  whileHover={{ y: -4, scale: 1.01 }}
-                  whileTap={{ scale: 0.98 }}
-                  transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                  className="group relative flex flex-col gap-5 p-7 rounded-2xl w-52 text-left overflow-hidden"
-                  style={{
-                    background: "rgba(255,255,255,0.025)",
-                    border: `1px solid rgba(255,255,255,0.08)`,
-                    boxShadow: "0 4px 24px rgba(0,0,0,0.3)",
-                    transition: "box-shadow 0.3s ease, border-color 0.3s ease",
-                  }}
-                  onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLElement).style.borderColor = `rgba(${item.accentRgb},0.25)`;
-                    (e.currentTarget as HTMLElement).style.boxShadow = `0 8px 32px rgba(0,0,0,0.4), 0 0 40px rgba(${item.accentRgb},0.08)`;
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLElement).style.borderColor = `rgba(255,255,255,0.08)`;
-                    (e.currentTarget as HTMLElement).style.boxShadow = `0 4px 24px rgba(0,0,0,0.3)`;
-                  }}
-                >
-                  <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
-                    style={{ background: `radial-gradient(ellipse at top left, rgba(${item.accentRgb},0.05), transparent 60%)` }} />
-
-                  <div className="relative w-12 h-12 rounded-xl flex items-center justify-center"
-                    style={{
-                      background: `rgba(${item.accentRgb},0.1)`,
-                      border: `1px solid rgba(${item.accentRgb},0.2)`,
-                      boxShadow: `0 0 20px rgba(${item.accentRgb},0.1)`
-                    }}>
-                    <item.icon className="w-5 h-5" style={{ color: item.accent }} />
-                  </div>
-
-                  <div className="relative">
-                    <div className="font-display font-bold text-base text-white mb-1">{item.title}</div>
-                    <div className="text-[11px]" style={{ color: "rgba(255,255,255,0.35)" }}>{item.desc}</div>
-                  </div>
-
-                  <div className="relative flex items-center gap-1.5 group-hover:gap-2.5 transition-all duration-200">
-                    <span className="text-[11px] font-medium" style={{ color: item.accent }}>Start session</span>
-                    <ArrowRight className="w-3 h-3 transition-transform duration-200 group-hover:translate-x-0.5"
-                      style={{ color: item.accent }} />
-                  </div>
-                </motion.button>
-              ))}
-            </motion.div>
-
-            {createConv.isPending && (
+            {stats && (
               <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="flex items-center gap-2.5 text-sm"
-                style={{ color: "rgba(0,240,255,0.7)" }}
+                initial={{ opacity: 0, x: 12 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.1 }}
               >
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                Initializing secure channel...
+                <p className="section-label mb-3">Live metrics</p>
+                <div className="space-y-2">
+                  {[
+                    { label: "Customers", value: stats.customers, color: "#60A5FA" },
+                    { label: "Open Tickets", value: stats.openTickets, color: "#FBBF24" },
+                    { label: "Escalated", value: stats.escalated, color: "#F87171" },
+                    { label: "Resolved", value: stats.resolved, color: "#4ADE80" },
+                    { label: "AI Actions", value: stats.actions, color: "#A78BFA" },
+                  ].map((s) => (
+                    <div key={s.label} className="flex items-center justify-between py-2 px-3 rounded-lg"
+                      style={{ background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.055)" }}>
+                      <span className="text-[12px]" style={{ color: "rgba(255,255,255,0.45)" }}>{s.label}</span>
+                      <span className="text-[13px] font-bold tabular-nums" style={{ color: s.color }}>{s.value}</span>
+                    </div>
+                  ))}
+                </div>
               </motion.div>
             )}
 
+            <div className="divider my-1" />
+
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.3, duration: 0.6 }}
-              className="grid grid-cols-4 gap-3 w-full max-w-lg"
+              initial={{ opacity: 0, x: 12 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.15 }}
             >
-              {CAPABILITIES.map((cap) => (
-                <div key={cap.label} className="p-3.5 rounded-xl text-center"
-                  style={{
-                    background: "rgba(255,255,255,0.02)",
-                    border: "1px solid rgba(255,255,255,0.05)"
-                  }}>
-                  <div className="text-[11px] font-semibold mb-0.5" style={{ color: cap.color }}>{cap.label}</div>
-                  <div className="text-[9px]" style={{ color: "rgba(255,255,255,0.25)" }}>{cap.desc}</div>
+              <p className="section-label mb-3">Recent sessions</p>
+              {conversations && conversations.length > 0 ? (
+                <div className="space-y-1">
+                  {[...(conversations as any[])].reverse().slice(0, 8).map((c: any) => (
+                    <div key={c.id} data-testid={`session-${c.id}`}
+                      className="flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors duration-150 cursor-default"
+                      style={{ border: "1px solid transparent" }}
+                      onMouseEnter={(e) => {
+                        (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.03)";
+                        (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.07)";
+                      }}
+                      onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLElement).style.background = "transparent";
+                        (e.currentTarget as HTMLElement).style.borderColor = "transparent";
+                      }}
+                    >
+                      <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: "rgba(96,165,250,0.5)" }} />
+                      <div className="min-w-0">
+                        <div className="text-[11px] font-medium text-white/60 truncate">{c.title}</div>
+                        <div className="text-[9px] font-mono mt-0.5" style={{ color: "rgba(255,255,255,0.22)" }}>
+                          {c.createdAt ? formatDistanceToNow(new Date(c.createdAt), { addSuffix: true }) : `#${c.id}`}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              ) : (
+                <div className="px-3 py-4 text-center">
+                  <Clock className="w-5 h-5 mx-auto mb-1.5" style={{ color: "rgba(255,255,255,0.15)" }} />
+                  <p className="text-[11px]" style={{ color: "rgba(255,255,255,0.25)" }}>No sessions yet</p>
+                </div>
+              )}
             </motion.div>
           </div>
         </div>
@@ -363,77 +278,50 @@ export default function CustomerSupport() {
 
   return (
     <SidebarLayout>
-      <div className="h-full flex flex-col max-w-5xl mx-auto gap-4">
-        <div className="flex items-center justify-between shrink-0">
+      <div className="flex flex-col h-full">
+        {/* Session header */}
+        <div className="shrink-0 flex items-center justify-between px-6 h-[52px]"
+          style={{ borderBottom: "1px solid rgba(255,255,255,0.065)", background: "rgba(255,255,255,0.01)" }}>
           <div className="flex items-center gap-3">
-            <div className={cn(
-              "w-2 h-2 rounded-full",
-              isRecording ? "bg-red-500 animate-pulse" :
-              isAgentResponding ? "bg-primary animate-pulse" :
-              "bg-green-400"
-            )} />
-            <span className="text-xs font-mono" style={{ color: "rgba(255,255,255,0.35)" }}>
+            <div className={cn("status-dot", isRecording ? "status-busy" : isAgentResponding ? "status-away animate-pulse-dot" : "status-online")} />
+            <span className="text-[12px] font-mono" style={{ color: "rgba(255,255,255,0.4)" }}>
               Session #{conversationId} · {mode === "voice" ? "Voice" : "Text"} Mode
             </span>
+            {isAgentResponding && (
+              <span className="badge badge-blue text-[10px]">
+                <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                Nexus responding
+              </span>
+            )}
           </div>
           <button
             onClick={() => { setMode("idle"); setConversationId(null); setMessages([]); }}
             data-testid="button-end-session"
-            className="text-[11px] transition-all duration-150 px-3 py-1.5 rounded-lg"
-            style={{
-              color: "rgba(255,255,255,0.4)",
-              border: "1px solid rgba(255,255,255,0.06)",
-              background: "rgba(255,255,255,0.02)"
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.8)";
-              (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.12)";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.4)";
-              (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.06)";
-            }}
+            className="btn-ghost text-[12px]"
+            style={{ padding: "6px 12px" }}
           >
             ← New Session
           </button>
         </div>
 
-        <div className="flex-1 flex gap-4 min-h-0">
-          <div className="flex-1 rounded-2xl flex flex-col overflow-hidden"
-            style={{
-              background: "rgba(255,255,255,0.02)",
-              border: "1px solid rgba(255,255,255,0.07)",
-              boxShadow: "0 4px 40px rgba(0,0,0,0.3)"
-            }}>
-            <div className="px-5 py-3.5 flex items-center gap-2.5"
-              style={{ borderBottom: "1px solid rgba(255,255,255,0.05)", background: "rgba(255,255,255,0.01)" }}>
-              <div className="w-7 h-7 rounded-lg flex items-center justify-center"
-                style={{ background: "rgba(0,240,255,0.08)", border: "1px solid rgba(0,240,255,0.15)" }}>
-                <Bot className="w-3.5 h-3.5" style={{ color: "rgba(0,240,255,0.8)" }} />
-              </div>
-              <span className="text-sm font-semibold text-white/80">Live Transcript</span>
-              {isAgentResponding && (
-                <span className="ml-auto text-[11px] font-mono flex items-center gap-1.5"
-                  style={{ color: "rgba(0,240,255,0.7)" }}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                  Nexus responding...
-                </span>
-              )}
-            </div>
-
-            <div ref={scrollRef} className="flex-1 overflow-y-auto p-5 space-y-4 scrollbar-hide">
+        {/* Main chat area */}
+        <div className="flex-1 flex min-h-0">
+          {/* Messages */}
+          <div className="flex-1 flex flex-col min-w-0">
+            <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
               {messages.length === 0 && !streamingText && (
-                <div className="flex flex-col items-center justify-center h-full gap-6 text-center">
+                <div className="flex flex-col items-center justify-center h-full gap-5 text-center py-10">
+                  <div className="w-14 h-14 rounded-2xl flex items-center justify-center"
+                    style={{
+                      background: "rgba(59,130,246,0.08)",
+                      border: "1px solid rgba(59,130,246,0.15)"
+                    }}>
+                    <Bot className="w-7 h-7" style={{ color: "rgba(96,165,250,0.7)" }} />
+                  </div>
                   <div>
-                    <div className="w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-3"
-                      style={{
-                        background: "rgba(0,240,255,0.06)",
-                        border: "1px solid rgba(0,240,255,0.12)"
-                      }}>
-                      <Bot className="w-6 h-6" style={{ color: "rgba(0,240,255,0.4)" }} />
-                    </div>
-                    <p className="text-sm" style={{ color: "rgba(255,255,255,0.3)" }}>
-                      {mode === "voice" ? "Press the mic button to start talking..." : "Describe your issue below or pick a quick option:"}
+                    <p className="font-semibold text-white/75 mb-1 text-[14px]">Nexus AI is ready</p>
+                    <p className="text-[12px]" style={{ color: "rgba(255,255,255,0.3)" }}>
+                      {mode === "voice" ? "Press the mic button to start talking" : "Describe your issue or pick a quick action"}
                     </p>
                   </div>
                   {mode === "text" && (
@@ -443,22 +331,10 @@ export default function CustomerSupport() {
                           key={s.label}
                           onClick={() => sendTextMessage(s.text)}
                           data-testid={`chip-${s.label.toLowerCase().replace(/\s+/g, "-")}`}
-                          className="flex items-center gap-2 p-3 rounded-xl text-left transition-all duration-150"
-                          style={{
-                            background: "rgba(255,255,255,0.025)",
-                            border: "1px solid rgba(255,255,255,0.07)"
-                          }}
-                          onMouseEnter={(e) => {
-                            (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)";
-                            (e.currentTarget as HTMLElement).style.borderColor = "rgba(0,240,255,0.15)";
-                          }}
-                          onMouseLeave={(e) => {
-                            (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.025)";
-                            (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.07)";
-                          }}
+                          className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-left card-surface-hover"
                         >
-                          <s.icon className="w-3.5 h-3.5 shrink-0" style={{ color: "rgba(0,240,255,0.6)" }} />
-                          <span className="text-[11px] font-medium text-white/60">{s.label}</span>
+                          <s.icon className="w-3.5 h-3.5 shrink-0" style={{ color: "rgba(96,165,250,0.6)" }} />
+                          <span className="text-[11px] font-medium text-white/55">{s.label}</span>
                         </button>
                       ))}
                     </div>
@@ -470,35 +346,30 @@ export default function CustomerSupport() {
                 {messages.map((msg, i) => (
                   <motion.div
                     key={i}
-                    initial={{ opacity: 0, y: 10, scale: 0.98 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-                    className={cn("flex gap-3 max-w-[86%]", msg.role === "user" ? "ml-auto flex-row-reverse" : "")}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                    className={cn("flex gap-3 max-w-[80%]", msg.role === "user" ? "ml-auto flex-row-reverse" : "")}
                   >
                     <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
-                      style={msg.role === "user" ? {
-                        background: "rgba(138,43,226,0.12)",
-                        border: "1px solid rgba(138,43,226,0.2)"
-                      } : {
-                        background: "rgba(0,240,255,0.08)",
-                        border: "1px solid rgba(0,240,255,0.15)"
-                      }}>
+                      style={msg.role === "user"
+                        ? { background: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.2)" }
+                        : { background: "rgba(59,130,246,0.1)", border: "1px solid rgba(59,130,246,0.18)" }}>
                       {msg.role === "user"
-                        ? <User className="w-3.5 h-3.5" style={{ color: "rgba(138,43,226,0.8)" }} />
-                        : <Bot className="w-3.5 h-3.5" style={{ color: "rgba(0,240,255,0.8)" }} />
-                      }
+                        ? <User className="w-3.5 h-3.5" style={{ color: "rgba(196,181,253,0.85)" }} />
+                        : <Bot className="w-3.5 h-3.5" style={{ color: "rgba(96,165,250,0.85)" }} />}
                     </div>
-                    <div className="px-4 py-3 rounded-2xl text-sm leading-relaxed"
+                    <div className="px-4 py-3 rounded-xl text-[13px] leading-relaxed"
                       style={msg.role === "user" ? {
-                        background: "rgba(138,43,226,0.08)",
-                        border: "1px solid rgba(138,43,226,0.15)",
+                        background: "rgba(139,92,246,0.08)",
+                        border: "1px solid rgba(139,92,246,0.14)",
                         borderTopRightRadius: 4,
-                        color: "rgba(255,255,255,0.85)"
+                        color: "rgba(255,255,255,0.83)"
                       } : {
-                        background: "rgba(255,255,255,0.04)",
-                        border: "1px solid rgba(255,255,255,0.07)",
+                        background: "rgba(255,255,255,0.035)",
+                        border: "1px solid rgba(255,255,255,0.08)",
                         borderTopLeftRadius: 4,
-                        color: "rgba(255,255,255,0.85)"
+                        color: "rgba(255,255,255,0.83)"
                       }}>
                       {msg.content}
                     </div>
@@ -507,69 +378,54 @@ export default function CustomerSupport() {
               </AnimatePresence>
 
               {streamingText && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="flex gap-3 max-w-[86%]"
-                >
+                <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex gap-3 max-w-[80%]">
                   <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
-                    style={{ background: "rgba(0,240,255,0.08)", border: "1px solid rgba(0,240,255,0.15)" }}>
-                    <Bot className="w-3.5 h-3.5 animate-pulse" style={{ color: "rgba(0,240,255,0.8)" }} />
+                    style={{ background: "rgba(59,130,246,0.1)", border: "1px solid rgba(59,130,246,0.18)" }}>
+                    <Bot className="w-3.5 h-3.5 animate-pulse" style={{ color: "rgba(96,165,250,0.85)" }} />
                   </div>
-                  <div className="px-4 py-3 rounded-2xl text-sm leading-relaxed"
+                  <div className="px-4 py-3 rounded-xl text-[13px] leading-relaxed"
                     style={{
-                      background: "rgba(255,255,255,0.04)",
-                      border: "1px solid rgba(255,255,255,0.07)",
+                      background: "rgba(255,255,255,0.035)",
+                      border: "1px solid rgba(255,255,255,0.08)",
                       borderTopLeftRadius: 4,
-                      color: "rgba(255,255,255,0.85)"
+                      color: "rgba(255,255,255,0.83)"
                     }}>
                     {streamingText}
-                    <span className="inline-block w-0.5 h-4 ml-1 align-middle rounded-sm cursor-blink"
-                      style={{ background: "rgba(0,240,255,0.8)" }} />
+                    <span className="inline-block w-0.5 h-[14px] ml-1 rounded-sm align-middle animate-cursor"
+                      style={{ background: "rgba(96,165,250,0.8)" }} />
                   </div>
                 </motion.div>
               )}
             </div>
 
             {mode === "text" && (
-              <div className="p-4 space-y-3"
-                style={{ borderTop: "1px solid rgba(255,255,255,0.05)", background: "rgba(0,0,0,0.1)" }}>
+              <div className="shrink-0 px-6 py-4 space-y-3"
+                style={{ borderTop: "1px solid rgba(255,255,255,0.065)", background: "rgba(255,255,255,0.01)" }}>
                 {messages.length > 0 && (
-                  <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+                  <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-0.5">
                     {QUICK_SUGGESTIONS.map((s) => (
-                      <button
-                        key={s.label}
-                        onClick={() => sendTextMessage(s.text)}
-                        disabled={isSending}
+                      <button key={s.label} onClick={() => sendTextMessage(s.text)} disabled={isSending}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] whitespace-nowrap transition-all duration-150"
                         style={{
-                          background: "rgba(255,255,255,0.03)",
-                          border: "1px solid rgba(255,255,255,0.07)",
-                          color: "rgba(255,255,255,0.45)"
-                        }}
-                      >
-                        <s.icon className="w-3 h-3" style={{ color: "rgba(0,240,255,0.5)" }} />
+                          background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)",
+                          color: "rgba(255,255,255,0.4)"
+                        }}>
+                        <s.icon className="w-3 h-3" style={{ color: "rgba(96,165,250,0.5)" }} />
                         {s.label}
                       </button>
                     ))}
                   </div>
                 )}
-                <div className="flex gap-3 items-end">
+                <div className="flex gap-2.5 items-end">
                   <textarea
                     value={textInput}
                     onChange={(e) => setTextInput(e.target.value)}
-                    onKeyDown={handleKeyDown}
+                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendTextMessage(); } }}
                     disabled={isSending}
                     data-testid="input-message"
-                    placeholder="Describe your issue... (Enter to send)"
-                    className="flex-1 rounded-xl px-4 py-3 text-sm resize-none h-12 focus:outline-none transition-all duration-200"
-                    style={{
-                      background: "rgba(255,255,255,0.04)",
-                      border: "1px solid rgba(255,255,255,0.08)",
-                      color: "rgba(255,255,255,0.85)",
-                    }}
-                    onFocus={(e) => { e.currentTarget.style.borderColor = "rgba(0,240,255,0.25)"; }}
-                    onBlur={(e) => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; }}
+                    placeholder="Describe your issue… (Enter to send)"
+                    className="input-field flex-1 resize-none"
+                    style={{ height: 44 }}
                     rows={1}
                   />
                   <Button
@@ -577,7 +433,7 @@ export default function CustomerSupport() {
                     disabled={!textInput.trim() || isSending}
                     size="icon"
                     data-testid="button-send"
-                    className="shrink-0 w-12 h-12 rounded-xl"
+                    className="shrink-0 h-11 w-11 rounded-xl"
                   >
                     {isSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                   </Button>
@@ -586,77 +442,62 @@ export default function CustomerSupport() {
             )}
           </div>
 
+          {/* Voice panel */}
           {mode === "voice" && (
-            <div className="w-52 flex flex-col gap-3">
-              <div className="rounded-2xl flex-1 flex flex-col items-center justify-center gap-6 p-6 relative overflow-hidden"
+            <div className="w-56 shrink-0 flex flex-col gap-4 p-5"
+              style={{ borderLeft: "1px solid rgba(255,255,255,0.065)" }}>
+              <div className="flex-1 flex flex-col items-center justify-center gap-5 rounded-xl py-8"
                 style={{
-                  background: "rgba(255,255,255,0.02)",
-                  border: `1px solid ${isRecording ? "rgba(239,68,68,0.2)" : isAgentResponding ? "rgba(0,240,255,0.15)" : "rgba(255,255,255,0.06)"}`,
-                  transition: "border-color 0.4s ease",
-                  boxShadow: isRecording
-                    ? "0 0 40px rgba(239,68,68,0.08)"
+                  background: isRecording
+                    ? "rgba(239,68,68,0.04)"
                     : isAgentResponding
-                    ? "0 0 40px rgba(0,240,255,0.06)"
-                    : "none"
+                    ? "rgba(59,130,246,0.04)"
+                    : "rgba(255,255,255,0.02)",
+                  border: isRecording
+                    ? "1px solid rgba(239,68,68,0.18)"
+                    : isAgentResponding
+                    ? "1px solid rgba(59,130,246,0.18)"
+                    : "1px solid rgba(255,255,255,0.07)",
+                  transition: "all 0.35s ease"
                 }}>
-                {isRecording && (
-                  <div className="absolute inset-0 rounded-2xl"
-                    style={{ background: "radial-gradient(ellipse at center, rgba(239,68,68,0.04), transparent 70%)" }} />
-                )}
-                {isAgentResponding && (
-                  <div className="absolute inset-0 rounded-2xl"
-                    style={{ background: "radial-gradient(ellipse at center, rgba(0,240,255,0.04), transparent 70%)" }} />
-                )}
-
-                <span className="text-[9px] font-mono tracking-[0.2em] uppercase z-10"
-                  style={{ color: isRecording ? "rgba(239,68,68,0.8)" : isAgentResponding ? "rgba(0,240,255,0.8)" : "rgba(255,255,255,0.3)" }}>
+                <p className="section-label">
                   {isRecording ? "Listening..." : isAgentResponding ? "Responding" : "Ready"}
-                </span>
-
-                <Waveform isRecording={isRecording} isPlaying={voiceStream.playbackState === "playing"} className="z-10" />
-
+                </p>
+                <Waveform isRecording={isRecording} isPlaying={voiceStream.playbackState === "playing"} />
                 <button
                   onClick={toggleRecording}
                   disabled={voiceStream.playbackState === "playing"}
                   data-testid="button-mic"
-                  className="relative w-16 h-16 rounded-full flex items-center justify-center z-10 transition-all duration-300"
+                  className="w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300"
                   style={isRecording ? {
-                    background: "rgba(239,68,68,0.12)",
-                    border: "1.5px solid rgba(239,68,68,0.5)",
-                    boxShadow: "0 0 30px rgba(239,68,68,0.25)",
+                    background: "rgba(239,68,68,0.12)", border: "1.5px solid rgba(239,68,68,0.45)",
+                    boxShadow: "0 0 24px rgba(239,68,68,0.2)"
                   } : {
-                    background: "rgba(0,240,255,0.08)",
-                    border: "1.5px solid rgba(0,240,255,0.3)",
-                    boxShadow: "0 0 20px rgba(0,240,255,0.12)",
+                    background: "rgba(59,130,246,0.1)", border: "1.5px solid rgba(59,130,246,0.35)",
+                    boxShadow: "0 0 16px rgba(59,130,246,0.15)"
                   }}
                 >
                   {isRecording
-                    ? <Square className="w-6 h-6 fill-current" style={{ color: "rgba(239,68,68,0.9)" }} />
-                    : <Mic className="w-6 h-6" style={{ color: "rgba(0,240,255,0.9)" }} />
-                  }
+                    ? <Square className="w-5 h-5 fill-current" style={{ color: "#F87171" }} />
+                    : <Mic className="w-5 h-5" style={{ color: "#60A5FA" }} />}
                 </button>
-
-                <p className="text-[11px] z-10" style={{ color: "rgba(255,255,255,0.3)" }}>
+                <p className="text-[11px]" style={{ color: "rgba(255,255,255,0.3)" }}>
                   {isRecording ? "Tap to stop" : "Tap to speak"}
                 </p>
               </div>
 
-              <div className="rounded-2xl p-4 space-y-2.5"
-                style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)" }}>
-                <div className="flex items-center gap-2 mb-3">
-                  <Activity className="w-3 h-3" style={{ color: "rgba(138,43,226,0.7)" }} />
-                  <span className="text-[9px] font-semibold uppercase tracking-widest"
-                    style={{ color: "rgba(255,255,255,0.3)" }}>Link Status</span>
-                </div>
+              <div className="rounded-xl p-4 space-y-2.5"
+                style={{ background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                <p className="section-label mb-2">Connection</p>
                 {[
-                  { label: "Connection", value: "Stable", color: "rgba(34,197,94,0.8)" },
-                  { label: "Latency", value: "~24ms", color: "rgba(0,240,255,0.7)" },
-                  { label: "Auth", value: "Verified", color: "rgba(34,197,94,0.8)" },
-                  { label: "Model", value: "gpt-audio", color: "rgba(138,43,226,0.8)" },
+                  { label: "Status", value: "Stable", color: "#4ADE80" },
+                  { label: "Latency", value: "~24ms", color: "#60A5FA" },
+                  { label: "Auth", value: "Verified", color: "#4ADE80" },
+                  { label: "Model", value: "gpt-audio", color: "#A78BFA" },
                 ].map((s) => (
                   <div key={s.label} className="flex justify-between items-center">
                     <span className="text-[10px] font-mono" style={{ color: "rgba(255,255,255,0.3)" }}>{s.label}</span>
-                    <span className="text-[10px] font-mono" style={{ color: s.color }}>{s.value}</span>
+                    <span className="text-[10px] font-mono font-medium" style={{ color: s.color }}>{s.value}</span>
                   </div>
                 ))}
               </div>
